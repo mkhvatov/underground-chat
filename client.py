@@ -42,9 +42,10 @@ async def tcp_client(host, port, history):
             message = f'{time} {data}'
             await save_message_to_file(data=message, filename=history)
             print(f'{data}')
-    except (CancelledError, KeyboardInterrupt):
+    except CancelledError:
         print('Close the connection')
-    except Exception as error:
+        raise
+    except BaseException as error:
         print(f'Error: {error}, {error.__class__}')
     finally:
         writer.close()
@@ -66,5 +67,8 @@ async def main():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
-    loop.close()
+    try:
+        loop.run_until_complete(main())
+        loop.close()
+    except KeyboardInterrupt:
+        print('Stop the client')
