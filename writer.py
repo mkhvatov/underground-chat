@@ -3,16 +3,14 @@ from asyncio import CancelledError
 import argparse
 import datetime
 
-import aiofiles
 from envparse import env
 
 
 HOST = env.str('HOST', default='minechat.dvmn.org')
-PORT = env.int('PORT', default=5000)
-HISTORY = env.str('HISTORY', default='history.txt')
+PORT = env.int('PORT', default=5050)
 
 
-parser = argparse.ArgumentParser(description='Underground chat client')
+parser = argparse.ArgumentParser(description='Underground chat writer client')
 parser.add_argument('--host',
                     type=str,
                     default=HOST,
@@ -23,46 +21,38 @@ parser.add_argument('--port',
                     default=PORT,
                     help='custom chat port; default=5000',
                     )
-parser.add_argument('--history',
-                    type=str,
-                    default=HISTORY,
-                    help='custom path for history file; default=\'./history.txt\'',
-                    )
 
 
-async def tcp_client(host, port, history):
+async def writer_client(host, port, token, message):
     reader, writer = await asyncio.open_connection(
         host, port)
 
     try:
-        while True:
-            data = await reader.readline()
-            data = data.decode()
-            time = datetime.datetime.now().strftime("[%d.%m.%y %H:%M]")
-            message = f'{time} {data}'
-            await save_message_to_file(data=message, filename=history)
-            print(f'{data}')
+        print(f'Token: {token}')
+        writer.write(token.encode())
+
+        print(f'Message: {message}')
+        writer.write(message.encode())
+
     except CancelledError:
         print('Close the connection')
         raise
     except BaseException as error:
         print(f'Error: {error}, {error.__class__}')
     finally:
+        await asyncio.sleep(10)
         writer.close()
 
 
-async def save_message_to_file(data, filename):
-    async with aiofiles.open(filename, mode='a') as file:
-        await file.write(data)
-
-
 async def main():
+    token = 'f261dde6-ae79-11ea-b989-0242ac110002'
+    message = 'Hello again!'
+
     args = parser.parse_args()
     host = args.host
     port = args.port
-    history = args.history
 
-    await tcp_client(host, port, history)
+    await writer_client(host, port, token, message)
 
 
 if __name__ == '__main__':
