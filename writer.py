@@ -28,11 +28,17 @@ async def writer_client(host, port, token, message):
         host, port)
 
     try:
-        print(f'Token: {token}')
-        writer.write(token.encode())
+        data = await reader.readline()
+        data = data.decode()
+        print(f'{data}')
 
-        print(f'Message: {message}')
-        writer.write(message.encode())
+        writer.write(f'{token}\n'.encode())
+
+        data = await reader.readline()
+        data = data.decode()
+        print(f'{data}')
+
+        writer.write(f'{message}\n\n'.encode())
 
     except CancelledError:
         print('Close the connection')
@@ -40,7 +46,6 @@ async def writer_client(host, port, token, message):
     except BaseException as error:
         print(f'Error: {error}, {error.__class__}')
     finally:
-        await asyncio.sleep(10)
         writer.close()
 
 
