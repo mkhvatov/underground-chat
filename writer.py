@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import CancelledError
 import argparse
-import datetime
+import logging
 
 from envparse import env
 
@@ -11,6 +11,11 @@ PORT = env.int('PORT', default=5050)
 
 
 parser = argparse.ArgumentParser(description='Underground chat writer client')
+parser.add_argument('--debug',
+                    action='store_true',
+                    default=False,
+                    help='activate logging for debug mode',
+                    )
 parser.add_argument('--host',
                     type=str,
                     default=HOST,
@@ -26,27 +31,39 @@ parser.add_argument('--port',
 async def writer_client(host, port, token, message):
     reader, writer = await asyncio.open_connection(
         host, port)
+    logging.info('The connection opened')
 
     try:
         data = await reader.readline()
         data = data.decode()
-        print(f'{data}')
+        logging.debug(f'sender: {data}')
 
         writer.write(f'{token}\n'.encode())
+        logging.debug(f'writer: send token {token}')
 
         data = await reader.readline()
         data = data.decode()
-        print(f'{data}')
+        logging.debug(f'sender: {data}')
+
+        data = await reader.readline()
+        data = data.decode()
+        logging.debug(f'sender: {data}')
 
         writer.write(f'{message}\n\n'.encode())
+        logging.debug(f'writer: {message}')
+
+        data = await reader.readline()
+        data = data.decode()
+        logging.debug(f'sender: {data}')
 
     except CancelledError:
-        print('Close the connection')
+        logging.info('Close the connection')
         raise
     except BaseException as error:
-        print(f'Error: {error}, {error.__class__}')
+        logging.error(f'Error: {error}, {error.__class__}')
     finally:
         writer.close()
+        logging.info('The connection closed')
 
 
 async def main():
@@ -54,6 +71,12 @@ async def main():
     message = 'Hello again!'
 
     args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     host = args.host
     port = args.port
 
@@ -66,4 +89,4 @@ if __name__ == '__main__':
         loop.run_until_complete(main())
         loop.close()
     except KeyboardInterrupt:
-        print('Stop the client')
+        logging.info('Stop the client')
