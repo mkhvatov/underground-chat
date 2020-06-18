@@ -42,6 +42,7 @@ async def reader_client(host, port, history):
             message = f'{time} {data}'
             await save_message_to_file(data=message, filename=history)
             print(f'{data}')
+    # todo: handle ConnectionResetError
     except CancelledError:
         print('Close the connection')
         raise
