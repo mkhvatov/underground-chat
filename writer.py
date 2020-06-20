@@ -35,6 +35,10 @@ parser.add_argument('--token',
                     )
 
 
+def sanitize(message):
+    return message.replace('\n', '')
+
+
 async def connect(host, port):
     reader, writer = await asyncio.open_connection(
         host, port)
@@ -53,6 +57,7 @@ async def register(reader, writer, nickname=None):
     logging.debug(f'sender: {data}')
 
     if nickname:
+        nickname = sanitize(nickname)
         writer.write(f'{nickname}\n'.encode())
         logging.debug(f'writer: send nickname {nickname}')
     else:
@@ -89,6 +94,7 @@ async def authorize(reader, writer, token: str) -> bool:
 
 
 async def submit_message(reader, writer, message):
+    message = sanitize(message)
     writer.write(f'{message}\n\n'.encode())
     logging.debug(f'writer: {message}')
 
