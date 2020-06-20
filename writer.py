@@ -35,11 +35,42 @@ parser.add_argument('--token',
                     )
 
 
-async def authorize(reader, writer, token: str) -> bool:
+async def connect(host, port):
+    reader, writer = await asyncio.open_connection(
+        host, port)
+    logging.info('The connection opened')
+
     data = await reader.readline()
     data = data.decode()
     logging.debug(f'sender: {data}')
 
+    return reader, writer
+
+
+async def register(reader, writer, nickname=None):
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'sender: {data}')
+
+    if nickname:
+        writer.write(f'{nickname}\n'.encode())
+        logging.debug(f'writer: send nickname {nickname}')
+    else:
+        writer.write('\n'.encode())
+
+    data = await reader.readline()
+    data = data.decode()
+    data = json.loads(data)
+    logging.debug(f'sender: {data}')
+    token = data['account_hash']
+
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'sender: {data}')
+    return token
+
+
+async def authorize(reader, writer, token: str) -> bool:
     writer.write(f'{token}\n'.encode())
     logging.debug(f'writer: send token {token}')
 
@@ -48,6 +79,7 @@ async def authorize(reader, writer, token: str) -> bool:
     data = json.loads(data)
     logging.debug(f'sender: {data}')
     if not data:
+        logging.info('Неизвестный токен. Проверьте его или зарегистрируйте заново.')
         return False
 
     data = await reader.readline()
@@ -56,48 +88,33 @@ async def authorize(reader, writer, token: str) -> bool:
     return True
 
 
-async def register(nickname):
-    pass
+async def submit_message(reader, writer, message):
+    writer.write(f'{message}\n\n'.encode())
+    logging.debug(f'writer: {message}')
+
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'sender: {data}')
 
 
-async def writer_client(host, port, token, message):
-    reader, writer = await asyncio.open_connection(
-        host, port)
-    logging.info('The connection opened')
+async def writer_client(host, port, token, message, nickname):
+    reader, writer = await connect(host, port)
 
     authorized = False
     if token:
         authorized = await authorize(reader, writer, token)
 
     if not token or not authorized:
-        # todo: register
-        pass
+        token = await register(reader, writer, nickname)
+        writer.close()
+        logging.info('The connection closed')
 
-    # todo: write message
+        reader, writer = await connect(host, port)
+
+        await authorize(reader, writer, token)
 
     try:
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'sender: {data}')
-
-        writer.write(f'{token}\n'.encode())
-        logging.debug(f'writer: send token {token}')
-
-        data = await reader.readline()
-        data = data.decode()
-        data = json.loads(data)
-        logging.debug(f'sender: {data}')
-
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'sender: {data}')
-
-        writer.write(f'{message}\n\n'.encode())
-        logging.debug(f'writer: {message}')
-
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'sender: {data}')
+        await submit_message(reader, writer, message)
 
     except CancelledError:
         logging.info('Close the connection')
@@ -110,8 +127,6 @@ async def writer_client(host, port, token, message):
 
 
 async def main():
-    token = 'f261dde6-ae79-11ea-b989-0242ac110002'
-    # token = 'f261dde6-ae79-11ea-b989-0242ac110001'
     message = 'Hello again!'
 
     args = parser.parse_args()
@@ -123,9 +138,13 @@ async def main():
 
     host = args.host
     port = args.port
-    token = args.token
+    # token = args.token
+    # token = 'f261dde6-ae79-11ea-b989-0242ac110002'
+    token = 'f261dde6-ae79-11ea-b989-0242ac110001'
+    nickname = 'Ivan'
+    nickname = None
 
-    await writer_client(host, port, token, message)
+    await writer_client(host, port, token, message, nickname)
 
 
 if __name__ == '__main__':
