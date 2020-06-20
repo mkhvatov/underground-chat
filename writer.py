@@ -10,6 +10,8 @@ from envparse import env
 HOST = env.str('HOST', default='minechat.dvmn.org')
 PORT = env.int('PORT', default=5050)
 TOKEN = env.str('TOKEN', default=None)
+USERNAME = env.str('USERNAME', default=None)
+MESSAGE = env.str('MESSAGE', default=None)
 
 
 parser = argparse.ArgumentParser(description='Underground chat writer client')
@@ -33,6 +35,16 @@ parser.add_argument('--token',
                     default=TOKEN,
                     help='token for authorization; default=None',
                     )
+parser.add_argument('--username',
+                    type=str,
+                    default=USERNAME,
+                    help='username for registration',
+                    )
+parser.add_argument('--message',
+                    type=str,
+                    default=MESSAGE,
+                    help='message to send',
+                    )
 
 
 def sanitize(message):
@@ -51,15 +63,15 @@ async def connect(host, port):
     return reader, writer
 
 
-async def register(reader, writer, nickname=None):
+async def register(reader, writer, username):
     data = await reader.readline()
     data = data.decode()
     logging.debug(f'sender: {data}')
 
-    if nickname:
-        nickname = sanitize(nickname)
-        writer.write(f'{nickname}\n'.encode())
-        logging.debug(f'writer: send nickname {nickname}')
+    if username:
+        username = sanitize(username)
+        writer.write(f'{username}\n'.encode())
+        logging.debug(f'writer: send username {username}')
     else:
         writer.write('\n'.encode())
 
@@ -68,6 +80,8 @@ async def register(reader, writer, nickname=None):
     data = json.loads(data)
     logging.debug(f'sender: {data}')
     token = data['account_hash']
+    nickname = data['nickname']
+    logging.debug(f'registered as: {nickname}')
 
     data = await reader.readline()
     data = data.decode()
@@ -75,7 +89,7 @@ async def register(reader, writer, nickname=None):
     return token
 
 
-async def authorize(reader, writer, token: str) -> bool:
+async def authorize(reader, writer, token):
     writer.write(f'{token}\n'.encode())
     logging.debug(f'writer: send token {token}')
 
@@ -86,6 +100,9 @@ async def authorize(reader, writer, token: str) -> bool:
     if not data:
         logging.info('Неизвестный токен. Проверьте его или зарегистрируйте заново.')
         return False
+
+    nickname = data['nickname']
+    logging.debug(f'authorized as: {nickname}')
 
     data = await reader.readline()
     data = data.decode()
@@ -103,7 +120,7 @@ async def submit_message(reader, writer, message):
     logging.debug(f'sender: {data}')
 
 
-async def writer_client(host, port, token, message, nickname):
+async def writer_client(host, port, token, message, username):
     reader, writer = await connect(host, port)
 
     authorized = False
@@ -111,7 +128,8 @@ async def writer_client(host, port, token, message, nickname):
         authorized = await authorize(reader, writer, token)
 
     if not token or not authorized:
-        token = await register(reader, writer, nickname)
+        token = await register(reader, writer, username)
+        # todo: save token to .env
         writer.close()
         logging.info('The connection closed')
 
@@ -144,13 +162,16 @@ async def main():
 
     host = args.host
     port = args.port
-    # token = args.token
-    # token = 'f261dde6-ae79-11ea-b989-0242ac110002'
-    token = 'f261dde6-ae79-11ea-b989-0242ac110001'
-    nickname = 'Ivan'
-    nickname = None
+    token = args.token
+    username = args.username
+    message = args.message
 
-    await writer_client(host, port, token, message, nickname)
+    # token = 'f261dde6-ae79-11ea-b989-0242ac110002'
+    # token = 'f261dde6-ae79-11ea-b989-0242ac110001'
+    # nickname = 'Ivan'
+    # nickname = None
+
+    await writer_client(host, port, token, message, username)
 
 
 if __name__ == '__main__':
