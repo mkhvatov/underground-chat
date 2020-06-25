@@ -5,46 +5,48 @@ import logging
 import json
 
 from envparse import env
+from dotenv import load_dotenv, set_key, find_dotenv
 
 
-HOST = env.str('HOST', default='minechat.dvmn.org')
-PORT = env.int('PORT', default=5050)
-TOKEN = env.str('TOKEN', default=None)
-USERNAME = env.str('USERNAME', default=None)
-MESSAGE = env.str('MESSAGE', default=None)
+def get_args():
+    host = env.str('SERVER_HOST', default='minechat.dvmn.org')
+    port = env.int('SERVER_WRITE_PORT')
+    token = env.str('TOKEN', default=None)
+    username = env.str('USERNAME', default=None)
+    message = env.str('MESSAGE', default='Hello everyone!')
 
-
-parser = argparse.ArgumentParser(description='Underground chat writer client')
-parser.add_argument('--debug',
-                    action='store_true',
-                    default=False,
-                    help='activate logging for debug mode',
-                    )
-parser.add_argument('--host',
-                    type=str,
-                    default=HOST,
-                    help='custom chat host; default=\'minechat.dvmn.org\'',
-                    )
-parser.add_argument('--port',
-                    type=int,
-                    default=PORT,
-                    help='custom chat port; default=5000',
-                    )
-parser.add_argument('--token',
-                    type=str,
-                    default=TOKEN,
-                    help='token for authorization; default=None',
-                    )
-parser.add_argument('--username',
-                    type=str,
-                    default=USERNAME,
-                    help='username for registration',
-                    )
-parser.add_argument('--message',
-                    type=str,
-                    default=MESSAGE,
-                    help='message to send',
-                    )
+    parser = argparse.ArgumentParser(description='Underground chat writer client')
+    parser.add_argument('--debug',
+                        action='store_true',
+                        default=False,
+                        help='activate logging for debug mode',
+                        )
+    parser.add_argument('--host',
+                        type=str,
+                        default=host,
+                        help='server host; default=\'minechat.dvmn.org\'',
+                        )
+    parser.add_argument('--port',
+                        type=int,
+                        default=port,
+                        help='server write port; default=5050',
+                        )
+    parser.add_argument('--token',
+                        type=str,
+                        default=token,
+                        help='token for authorization; default=None',
+                        )
+    parser.add_argument('--username',
+                        type=str,
+                        default=username,
+                        help='username for registration',
+                        )
+    parser.add_argument('--message',
+                        type=str,
+                        default=message,
+                        help='message to send',
+                        )
+    return parser.parse_args()
 
 
 def sanitize(message):
@@ -54,7 +56,7 @@ def sanitize(message):
 async def connect(host, port):
     reader, writer = await asyncio.open_connection(
         host, port)
-    logging.info('The connection opened')
+    logging.debug('The connection opened')
 
     data = await reader.readline()
     data = data.decode()
@@ -90,6 +92,11 @@ async def register(reader, writer, username):
 
 
 async def authorize(reader, writer, token):
+    if not token:
+        writer.write('\n'.encode())
+        logging.debug(f'writer: send empty string')
+        return False
+
     writer.write(f'{token}\n'.encode())
     logging.debug(f'writer: send token {token}')
 
@@ -98,7 +105,7 @@ async def authorize(reader, writer, token):
     data = json.loads(data)
     logging.debug(f'sender: {data}')
     if not data:
-        logging.info('Неизвестный токен. Проверьте его или зарегистрируйте заново.')
+        logging.debug('Неизвестный токен. Проверьте его или зарегистрируйте заново.')
         return False
 
     nickname = data['nickname']
@@ -123,53 +130,45 @@ async def submit_message(reader, writer, message):
 async def writer_client(host, port, token, message, username):
     reader, writer = await connect(host, port)
 
-    authorized = False
-    if token:
+    try:
         authorized = await authorize(reader, writer, token)
 
-    if not token or not authorized:
-        token = await register(reader, writer, username)
-        # todo: save token to .env
-        writer.close()
-        logging.info('The connection closed')
+        if not authorized:
+            token = await register(reader, writer, username)
+            set_key(find_dotenv(), "TOKEN", token)
 
-        reader, writer = await connect(host, port)
+            writer.close()
+            logging.debug('The connection closed')
 
-        await authorize(reader, writer, token)
+            reader, writer = await connect(host, port)
 
-    try:
+            await authorize(reader, writer, token)
+
         await submit_message(reader, writer, message)
 
+    # todo:
     except CancelledError:
-        logging.info('Close the connection')
+        logging.debug('Close the connection')
         raise
     except BaseException as error:
         logging.error(f'Error: {error}, {error.__class__}')
     finally:
         writer.close()
-        logging.info('The connection closed')
+        logging.debug('The connection closed')
 
 
 async def main():
-    message = 'Hello again!'
-
-    args = parser.parse_args()
+    load_dotenv()
+    args = get_args()
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
 
     host = args.host
     port = args.port
     token = args.token
     username = args.username
     message = args.message
-
-    # token = 'f261dde6-ae79-11ea-b989-0242ac110002'
-    # token = 'f261dde6-ae79-11ea-b989-0242ac110001'
-    # nickname = 'Ivan'
-    # nickname = None
 
     await writer_client(host, port, token, message, username)
 
@@ -180,4 +179,4 @@ if __name__ == '__main__':
         loop.run_until_complete(main())
         loop.close()
     except KeyboardInterrupt:
-        logging.info('Stop the client')
+        logging.debug('Stop the client')
